@@ -43,7 +43,7 @@ jobs:
             skill/pebble-dev
           tar -tzf "dist/pebble-dev-skill-${{ steps.ver.outputs.tag }}.tar.gz" | head -20
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - uses: astral-sh/setup-uv@v7
