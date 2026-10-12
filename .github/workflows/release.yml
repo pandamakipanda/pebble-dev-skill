@@ -60,8 +60,12 @@ jobs:
         run: |
           pebble build
           python3 tests/verify_pbw.py
-          cp build/*.pbw "../../../dist/my-watchface-${{ steps.ver.outputs.tag }}.pbw"
-          ls -la ../../../dist/
+          # 用 $GITHUB_WORKSPACE 拼绝对路径，不要数 ../ 的层数
+          # （数错过一次：my-watchface → starter → pebble-dev → skill 是四级）
+          DEST="$GITHUB_WORKSPACE/dist/my-watchface-${{ steps.ver.outputs.tag }}.pbw"
+          mkdir -p "$(dirname "$DEST")"
+          cp build/*.pbw "$DEST"
+          ls -la "$(dirname "$DEST")"
 
       - name: 生成校验和
         working-directory: dist
