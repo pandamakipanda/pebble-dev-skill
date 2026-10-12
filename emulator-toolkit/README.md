@@ -53,7 +53,9 @@ Saved screenshot to /root/shot-official-emery.png      # 200x228, 显示 15:49 /
 （从 SDK 的 `qemu_spi_flash.bin.bz2` 解压），并**校验 flash 尺寸**。
 
 ```bash
-pip install libpebble2 Pillow          # 依赖（若用 pebble-tool 的 venv 会自动找到）
+# 依赖（也有 requirements.txt；若用 pebble-tool 的 venv，emu_run.py 会自动找到）
+pip install -r requirements.txt
+# 或者： pip install libpebble2 Pillow
 
 # 把 .pbw 装进模拟器并截图 → <prefix>-before.png / -after.png / -after2.png
 python3 emu_run.py emery /path/to/app.pbw /tmp/out
