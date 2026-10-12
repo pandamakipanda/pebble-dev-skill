@@ -52,8 +52,21 @@ jobs:
       - name: 让 pebble 进 PATH
         run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: 安装 SDK
-        run: pebble sdk install 4.33.1 || pebble sdk install latest
+      # 注意：**不要**无条件跑 `pebble sdk install`。
+      # SDK 已存在时它会 `raise SDKInstallError("<ver> is already installed.")`
+      # 并返回退出码 1 —— 于是"缓存命中"反而让 CI 变红（首次运行没缓存时才是绿的，
+      # 典型的定时炸弹写法，我们踩过）。所以先检测、按需安装。
+      - name: 安装 SDK（缓存命中则跳过）
+        run: |
+          # 判定"是否已有可用 SDK"必须看 (active) 标记：
+          # 用 `grep -qE "^[0-9]"` 是错的 —— 空目录下 "Available SDKs:" 列表
+          # 同样是数字开头，会误判为已装（这个错我犯过一次，好在验证时抓到）。
+          if pebble sdk list 2>/dev/null | grep -q "(active)"; then
+            echo "已有 SDK："; pebble sdk list
+          else
+            pebble sdk install 4.33.1 || pebble sdk install latest
+          fi
+          pebble sdk list
 
       - name: 构建 4 平台的 .pbw
         working-directory: skill/pebble-dev/starter/my-watchface
