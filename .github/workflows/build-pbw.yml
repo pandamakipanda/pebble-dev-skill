@@ -113,7 +113,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: 上传 .pbw
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pbw-${{ matrix.platform }}-${{ runner.os }}
           path: skill/pebble-dev/starter/my-watchface/build/*.pbw
@@ -122,7 +122,7 @@ jobs:
 
       - name: 上传模拟器截图（若本 job 产出）
         if: hashFiles('skill/pebble-dev/starter/my-watchface/build/screenshot*.png') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: screenshots-${{ matrix.platform }}
           path: skill/pebble-dev/starter/my-watchface/build/screenshot*.png

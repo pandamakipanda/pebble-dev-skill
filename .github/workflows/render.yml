@@ -129,7 +129,7 @@ jobs:
 
       - name: 上传截图（失败时也要，方便排查）
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: render-${{ matrix.platform }}
           path: /tmp/render-test-*/run-*.png
