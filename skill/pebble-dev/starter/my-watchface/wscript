@@ -1,0 +1,62 @@
+#
+# This file is the default set of rules to compile a Pebble application.
+#
+# Feel free to customize this to your needs.
+#
+import os.path
+
+top = '.'
+out = 'build'
+
+
+def options(ctx):
+    ctx.load('pebble_sdk')
+
+
+def configure(ctx):
+    """
+    This method is used to configure your build. ctx.load(`pebble_sdk`) automatically configures
+    a build for each valid platform in `targetPlatforms`. Platform-specific configuration: add your
+    change after calling ctx.load('pebble_sdk') and make sure to set the correct environment first.
+    Universal configuration: add your change prior to calling ctx.load('pebble_sdk').
+    """
+    ctx.load('pebble_sdk')
+
+
+def build(ctx):
+    ctx.load('pebble_sdk')
+
+    # 【不要开 LTO —— 实测会把包做废】
+    # 试过在 CFLAGS/LINKFLAGS 加 -flto：.text 确实从 2069 降到 1813 字节、构建也报成功，
+    # 但产物是坏的：pebble-app.bin 开头没有 PBLAPP 元数据头（对比 hex 可见直接是 .text），
+    # 因为 inject_metadata.py 是**原地改写** objcopy 出来的 bin（往偏移 0x0/0x8/…/0x80 写
+    # PebbleProcessInfo），而 LTO 下目标文件是 GIMPLE 字节码，objcopy -O binary 取不到内容，
+    # 注入器写了个寂寞 —— 而且**构建不报错**。装到手表会直接失败。
+    # 结论：LTO 在 waf 这套 objcopy+原地注入的流程里不可用，别再试。
+
+    build_worker = os.path.exists('worker_src')
+    binaries = []
+
+    cached_env = ctx.env
+    for platform in ctx.env.TARGET_PLATFORMS:
+        ctx.env = ctx.all_envs[platform]
+        ctx.set_group(ctx.env.PLATFORM_NAME)
+        app_elf = '{}/pebble-app.elf'.format(ctx.env.BUILD_DIR)
+        ctx.pbl_build(source=ctx.path.ant_glob('src/c/**/*.c'), target=app_elf, bin_type='app')
+
+        if build_worker:
+            worker_elf = '{}/pebble-worker.elf'.format(ctx.env.BUILD_DIR)
+            binaries.append({'platform': platform, 'app_elf': app_elf, 'worker_elf': worker_elf})
+            ctx.pbl_build(source=ctx.path.ant_glob('worker_src/c/**/*.c'),
+                          target=worker_elf,
+                          bin_type='worker')
+        else:
+            binaries.append({'platform': platform, 'app_elf': app_elf})
+    ctx.env = cached_env
+
+    ctx.set_group('bundle')
+    ctx.pbl_bundle(binaries=binaries,
+                   js=ctx.path.ant_glob(['src/pkjs/**/*.js',
+                                         'src/pkjs/**/*.json',
+                                         'src/common/**/*.js']),
+                   js_entry_file='src/pkjs/index.js')

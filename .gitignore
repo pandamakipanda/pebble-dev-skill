@@ -1,0 +1,42 @@
+# ---- 构建产物（Pebble SDK / waf）----
+build/
+*.pbw
+*.elf
+*.raw.bin
+.lock-waf*
+.lock-waf_*_build
+waf-*
+.waf-*/
+c4che/
+compile_commands.json
+
+# ---- 测试与测量的临时产物 ----
+/tmp/
+*.o
+*.d
+
+# ---- 自动生成的资源/元数据 ----
+src/resource_ids.auto.*
+src/message_keys.auto.*
+appinfo.auto.c
+*.resball
+*.pbpack
+pebble-app.map
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ---- 本仓库自己的杂物（官方 skill 仓库同款约定）----
+examples-test/
+scratch/

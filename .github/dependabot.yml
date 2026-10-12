@@ -1,0 +1,21 @@
+# Dependabot：保持 CI 依赖与 Actions 版本新鲜
+version: 2
+updates:
+  # GitHub Actions 的版本钉住（actions/checkout@v4 之类）
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci"
+    labels: [dependencies, ci]
+
+  # 本项目没有 npm 依赖，但 starter 的 package.json 会被 Dependabot 误判，
+  # 这里显式忽略（Pebble 的 package.json 不是 npm 包清单）。
+  - package-ecosystem: pip
+    directory: /emulator-toolkit
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "deps"
+    labels: [dependencies]

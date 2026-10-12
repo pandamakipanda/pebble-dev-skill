@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 讨论 / 提问
+    url: https://github.com/OWNER/REPO/discussions
+    about: 不确定是不是 bug？来 Discussions 聊。
+  - name: 📖 Pebble 官方开发者文档
+    url: https://developer.rebble.io/
+    about: SDK / API 本身的文档问题请找官方。
+  - name: 🔧 上游 pebble-tool
+    url: https://github.com/coredevices/pebble-tool/issues
+    about: pebble-tool 本身的 bug 请报给上游。

@@ -1,0 +1,119 @@
+# 真机构建：装 Pebble SDK、编译 .pbw、跑产物健全性检查、把 .pbw 作为 artifact 上传。
+#
+# 这个 job 慢（要下约 240 MB 工具链），所以与 checks.yml 分开：
+# PR 的门禁是 checks（快），这个只在 push/main、tag、手动或产物相关改动时跑。
+name: Build .pbw
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "skill/pebble-dev/starter/**"
+      - ".github/workflows/build-pbw.yml"
+  pull_request:
+    paths:
+      - "skill/pebble-dev/starter/**"
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: 构建 ${{ matrix.platform }}（${{ matrix.os }}）
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: emery        # Pebble Time 2
+          - os: ubuntu-latest
+            platform: flint        # Pebble 2 Duo
+          - os: macos-latest
+            platform: gabbro       # Pebble Round 2
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"   # pebble-tool 5.0.18+ 尚不支持 3.14
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: 安装 pebble-tool
+        run: uv tool install pebble-tool --python 3.13
+
+      - name: 让 pebble 进 PATH
+        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # SDK + 工具链约 240 MB，缓存后第二次起快很多
+      - name: 缓存 Pebble SDK
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pebble-sdk
+          key: pebble-sdk-${{ runner.os }}-${{ runner.arch }}-4.33.1
+
+      - name: 安装 SDK
+        run: |
+          pebble --version
+          pebble sdk install 4.33.1 || pebble sdk install latest
+          pebble sdk list
+
+      - name: 只针对目标平台构建
+        working-directory: skill/pebble-dev/starter/my-watchface
+        run: |
+          python3 - <<'PY'
+          import json
+          p = "package.json"
+          d = json.load(open(p))
+          d["pebble"]["targetPlatforms"] = ["${{ matrix.platform }}"]
+          json.dump(d, open(p, "w"), indent=2)
+          print("targetPlatforms ->", d["pebble"]["targetPlatforms"])
+          PY
+          pebble build
+
+      # 这一步是重点：构建成功 ≠ 产物可用（LTO 那次事故就是这么漏过去的）
+      - name: 产物健全性检查
+        working-directory: skill/pebble-dev/starter/my-watchface
+        run: python3 tests/verify_pbw.py
+
+      - name: 护栏自检（确认 verify_pbw 能拦下坏包）
+        working-directory: skill/pebble-dev/starter/my-watchface
+        run: python3 tests/selftest_verify.py
+
+      - name: 记录产物体积
+        working-directory: skill/pebble-dev/starter/my-watchface
+        run: |
+          {
+            echo "### 构建结果：${{ matrix.platform }} @ ${{ runner.os }}/${{ runner.arch }}"
+            echo ""
+            echo "| 指标 | 数值 |"
+            echo "|---|---|"
+            for f in build/*.pbw; do
+              echo "| \`.pbw\` | $(stat -c %s "$f" 2>/dev/null || stat -f %z "$f") 字节 |"
+            done
+            for plat in build/*/; do
+              [ -f "$plat/pebble-app.bin" ] || continue
+              echo "| \`$(basename "$plat")/pebble-app.bin\` | $(stat -c %s "$plat/pebble-app.bin" 2>/dev/null || stat -f %z "$plat/pebble-app.bin") 字节 |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 上传 .pbw
+        uses: actions/upload-artifact@v4
+        with:
+          name: pbw-${{ matrix.platform }}-${{ runner.os }}
+          path: skill/pebble-dev/starter/my-watchface/build/*.pbw
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: 上传模拟器截图（若本 job 产出）
+        if: hashFiles('skill/pebble-dev/starter/my-watchface/build/screenshot*.png') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ matrix.platform }}
+          path: skill/pebble-dev/starter/my-watchface/build/screenshot*.png
+          if-no-files-found: ignore

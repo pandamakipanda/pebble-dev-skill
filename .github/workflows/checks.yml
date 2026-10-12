@@ -1,0 +1,114 @@
+# 主机侧检查：不需要 Pebble SDK，跑得很快，作为必过的门禁。
+#
+# 这些测试是纯 C + Python，在任何 Linux/macOS runner 上都能跑，
+# 所以 PR 不会被"装 SDK 失败"这类环境问题卡住。
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  skill-lint:
+    name: SKILL.md 结构检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 校验 skill frontmatter 与内部链接
+        run: python3 .github/scripts/lint_skill.py SKILL.md
+
+  host-tests:
+    name: 单元测试 / 布局穷举 / 变异测试 / 产物检查脚本
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 环境
+        run: |
+          cc --version | head -1
+          python3 --version
+
+      - name: 安装 jq（仅 Linux，用于后续步骤）
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq jq
+
+      # ---- 起始工程的三层验证 ----
+      - name: 格式化单元测试 + 差分对拍
+        working-directory: starter/my-watchface
+        run: |
+          make test 2>&1 | tee /tmp/test.log
+          # 注意实际输出是 "失败: 0"，不是 "0 失败" —— 这里写错过一次，本地模拟 CI 时抓出来的
+          grep -q "失败: 0" /tmp/test.log
+
+      - name: 变异测试（必须 0 逃逸、0 过期变异体）
+        working-directory: starter/my-watchface
+        run: |
+          make mutate 2>&1 | tee /tmp/mutate.log
+          grep -q "逃逸 0 / 过期 0" /tmp/mutate.log
+
+      - name: 编译期护栏确实会拦下坏改动
+        working-directory: starter/my-watchface
+        run: |
+          # 把电池缓冲区改小到 5，fmt.h 里的静态断言必须让编译失败。
+          # 这条测试防的是"护栏被悄悄删掉"。
+          cp src/c/fmt.h /tmp/fmt.h.bak
+          sed -i.bak 's/#define FMT_BATT_BUF_LEN 8/#define FMT_BATT_BUF_LEN 5/' src/c/fmt.h
+          if gcc -std=c11 -Wall -Wextra -c src/c/fmt.c -o /tmp/guard.o 2>/dev/null; then
+            echo "::error::护栏失效：把 BATT 缓冲区改小到 5 竟然编译通过了"
+            cp /tmp/fmt.h.bak src/c/fmt.h
+            exit 1
+          fi
+          cp /tmp/fmt.h.bak src/c/fmt.h
+          echo "护栏生效 ✓"
+
+      - name: 产物健全性检查能识别坏包（用构造的坏包做反向验证）
+        working-directory: starter/my-watchface
+        run: python3 tests/selftest_verify.py
+
+  python-lint:
+    name: Python 语法与风格
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 语法检查
+        run: |
+          python3 -m compileall -q \
+            skill/pebble-dev/starter/my-watchface/tests \
+            emulator-toolkit \
+            .github/scripts
+          echo "全部 Python 文件语法正确 ✓"
+
+      - name: ruff
+        run: |
+          pip install -q ruff
+          ruff check --select E9,F --output-format=github \
+            skill/pebble-dev/starter/my-watchface/tests \
+            emulator-toolkit \
+            .github/scripts
+
+  shellcheck:
+    name: Shell 脚本检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          # measure.sh 用了数组与 trap，按 bash 检查
+          shellcheck --severity=error -s bash \
+            skill/pebble-dev/starter/my-watchface/measure.sh
+          echo "shell 脚本检查通过 ✓"

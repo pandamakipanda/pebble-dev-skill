@@ -1,0 +1,40 @@
+name: ✨ 功能建议
+description: 新工具、新检查、新平台支持
+title: "[feat] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你想解决什么问题
+      description: 请描述"痛点"而不是"实现方案"——方案我们可以一起讨论。
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你设想的方案（可选）
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 大概属于哪块
+      options:
+        - 验证方法论（测试 / 变异 / 护栏）
+        - 模拟器与截图
+        - 文档与 skill 内容
+        - 新平台 / 新工具链适配
+        - CI / 工程
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: willing
+    attributes:
+      label: 你愿意自己实现吗
+      options:
+        - label: 我愿意提 PR
+          required: false

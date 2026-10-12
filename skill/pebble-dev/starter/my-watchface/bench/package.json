@@ -1,0 +1,29 @@
+{
+  "name": "ai-watchface-naive",
+  "author": "AI (dsh) benchmark",
+  "version": "1.0.0",
+  "keywords": ["pebble-app"],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "AI Lab naive",
+    "uuid": "2ea268b2-83f9-4821-8849-f4af7a3ce624",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": [
+      "basalt",
+      "emery",
+      "flint",
+      "gabbro"
+    ],
+    "watchapp": {
+      "watchface": true
+    },
+    "messageKeys": [
+      "dummy"
+    ],
+    "resources": {
+      "media": []
+    }
+  }
+}

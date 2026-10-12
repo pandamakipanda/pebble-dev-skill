@@ -1,0 +1,7 @@
+# 默认所有改动都请仓库所有者 review
+*                       @OWNER
+
+# 关键路径：改动这些会直接影响 skill 加载与"防坏包"护栏
+/skill/pebble-dev/SKILL.md              @OWNER
+/skill/pebble-dev/starter/tests/        @OWNER
+/.github/workflows/                     @OWNER

@@ -1,0 +1,56 @@
+name: 📉 事实纠错
+description: 文档里的数字/结论不对（本项目最欢迎的一类 issue）
+title: "[fact] "
+labels: ["documentation", "fact-check"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        本项目的核心价值是"文档里的每个数字都可复现"，所以我们非常欢迎纠错。
+        **我们自己的 README 就被实测推翻过两次**：
+        1. 以为手写格式化能省体积 → 实测反而净增代码
+        2. 以为 `MINUTE_UNIT` 减少了唤醒次数 → 反汇编发现只减少用户回调
+
+  - type: input
+    id: location
+    attributes:
+      label: 出错的原文位置
+      description: 文件 + 小节（有行号更好）
+      placeholder: "SKILL.md 第五节 / README.md「几个反直觉的实测结论」"
+    validations:
+      required: true
+
+  - type: textarea
+    id: original
+    attributes:
+      label: 原来的说法
+      description: 把原文粘过来
+    validations:
+      required: true
+
+  - type: textarea
+    id: correction
+    attributes:
+      label: 正确的说法
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 证据（复现命令 / 输出 / 上游源码位置）
+      description: 这一栏是这类 issue 的关键。请给出别人能独立复现的步骤。
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: strength
+    attributes:
+      label: 你的证据强度
+      options:
+        - 【实测】我自己跑出来了
+        - 【报告】来自可靠来源但我没复现
+        - 【未验证】推测
+    validations:
+      required: true

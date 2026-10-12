@@ -1,0 +1,100 @@
+# 发布：推一个 v* tag 就自动打包并建 GitHub Release。
+#
+# 产物：
+#   - pebble-dev-skill-<tag>.tar.gz   完整 skill（可直接解到 agent 的 skills 目录）
+#   - my-watchface-<tag>.pbw          起始工程编出来的表盘（可直接装到手表）
+#   - SHA256SUMS.txt                  校验和
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要发布的 tag（例如 v1.0.0）"
+        required: true
+
+permissions:
+  contents: write        # 创建 Release 需要
+
+jobs:
+  release:
+    name: 打包并发布
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # CHANGELOG / 描述需要完整历史
+
+      - name: 确定版本号
+        id: ver
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 打包 skill（含自带 starter）
+        run: |
+          mkdir -p dist
+          tar -czf "dist/pebble-dev-skill-${{ steps.ver.outputs.tag }}.tar.gz" \
+            skill/pebble-dev
+          tar -tzf "dist/pebble-dev-skill-${{ steps.ver.outputs.tag }}.tar.gz" | head -20
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v7
+      - name: 安装 pebble-tool
+        run: uv tool install pebble-tool --python 3.13
+      - name: 让 pebble 进 PATH
+        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: 安装 SDK
+        run: pebble sdk install 4.33.1 || pebble sdk install latest
+
+      - name: 构建 4 平台的 .pbw
+        working-directory: skill/pebble-dev/starter/my-watchface
+        run: |
+          pebble build
+          python3 tests/verify_pbw.py
+          cp build/*.pbw "../../../dist/my-watchface-${{ steps.ver.outputs.tag }}.pbw"
+          ls -la ../../../dist/
+
+      - name: 生成校验和
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+
+      - name: 从 CHANGELOG 抽取本版说明
+        id: notes
+        run: |
+          python3 - <<'PY' > /tmp/notes.md
+          import re, os
+          tag = "${{ steps.ver.outputs.tag }}".lstrip("v")
+          try:
+              text = open("CHANGELOG.md", encoding="utf-8").read()
+          except FileNotFoundError:
+              print("（本次发布未附 CHANGELOG 段落）")
+              raise SystemExit
+          # 抓取 "## [x.y.z]" 到下一个 "## " 之间的内容
+          m = re.search(r"^##\s*\[?%s\]?.*?$(.*?)(?=^##\s|\Z)" % re.escape(tag),
+                        text, re.S | re.M)
+          print(m.group(1).strip() if m else "（CHANGELOG 里没有 %s 的段落）" % tag)
+          PY
+          cat /tmp/notes.md
+
+      - name: 创建 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.tag }}
+          body_path: /tmp/notes.md
+          draft: false
+          prerelease: ${{ contains(steps.ver.outputs.tag, '-') }}
+          files: |
+            dist/*.tar.gz
+            dist/*.pbw
+            dist/SHA256SUMS.txt
+          generate_release_notes: true      # 让 GitHub 自动生成"新贡献者/完整变更"段落
