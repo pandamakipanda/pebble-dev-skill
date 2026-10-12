@@ -99,7 +99,7 @@ Ubuntu 系统依赖：`python3-pip python3-venv nodejs npm libsdl1.2debian libfd
 几何正确性  布局抽成纯函数，穷举行高 × 屏幕尺寸        2,554,681 检查点
 测试有效性  变异测试：注入 20 个已知 bug              20/20 抓到, 0 逃逸
 产物可用性  PBLAPP 魔数 + 元数据解析 + manifest 交叉核对   verify_pbw.py
-视觉正确性  模拟器实渲染 + 画面断言（CI 四平台）          test_render.py  12 检查点
+视觉正确性  模拟器实渲染 + 画面断言（CI 三平台）          test_render.py  12 检查点
 ```
 
 **视觉那一层不是锦上添花，它抓的是别人抓不到的东西。** 我们真实踩过一次回归：
@@ -175,6 +175,7 @@ regression that passed every structural assertion.
 - **Enabling LTO produces a broken bundle** while still reporting build success.
 
 **Verify counts:** 18,286 format checks · 2,554,681 layout checks ·
-20/20 mutants caught · 4 platforms screenshot-verified.
+20/20 mutants caught · screenshot-verified on every platform that renders
+reliably in CI (emery / flint / gabbro).
 
 MIT licensed. Not affiliated with Core Devices / Pebble / Rebble.

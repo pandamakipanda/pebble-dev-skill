@@ -29,7 +29,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [emery, flint, gabbro, basalt]
+        # 只放**在 CI 上稳定可渲染**的平台。
+        #
+        # basalt 被移除的原因（实测，不是猜）：它与 emery/flint/gabbro 共用同一套流程，
+        # 但表现不稳定 —— 3 次 CI 运行里只有 1 次成功，失败时固件根本不响应协议
+        # （`waiting... attempt N: Connection timed out` 直到超时），
+        # 本机 arm64 上也一样起不来（两份 flash 字节完全相同 ⇒ 不是 flash 问题，
+        # 是初代 2015 平台的 QEMU 目标在当代 runner 上不可靠）。
+        # basalt 仍然在 `build-pbw.yml` 的构建矩阵里正常构建与做产物检查。
+        platform: [emery, flint, gabbro]
     steps:
       - uses: actions/checkout@v7
 
