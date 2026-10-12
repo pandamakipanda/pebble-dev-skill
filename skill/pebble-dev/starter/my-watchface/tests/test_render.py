@@ -86,6 +86,8 @@ def main():
     ap.add_argument("--platform", default="emery", choices=sorted(EXPECT))
     ap.add_argument("--pbw")
     ap.add_argument("--keep", action="store_true", help="保留临时截图目录")
+    ap.add_argument("--timeout", type=int, default=900,
+                    help="模拟器单次运行的总超时秒数（默认 900；老平台启动慢）")
     args = ap.parse_args()
 
     if not os.path.exists(EMU):
@@ -115,7 +117,17 @@ def main():
            "--proto", str(base_ports), "--cons", str(base_ports + 1),
            "--gdb", str(base_ports + 2), "--mon", str(base_ports + 3)]
     print("运行模拟器：", " ".join(cmd[:6]), "…")
-    proc = subprocess.run(cmd, capture_output=True, text=False, timeout=600)
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=False, timeout=args.timeout)
+    except subprocess.TimeoutExpired as e:
+        # 必须显式处理：以前这里让它裸抛，CI 里表现为"步骤无输出直接失败"，
+        # 完全看不出是超时（这个坑真踩过）。
+        partial = (e.stdout or b"").decode("utf-8", "replace")
+        print("\n".join("    " + ln for ln in partial.strip().splitlines()[-12:]))
+        print(f"\n模拟器跑满 {args.timeout}s 仍未完成 —— 判定为失败（不是『环境不具备』）。")
+        print("  常见原因：该平台的 SPI flash 需要 SDK 里的 qemu_spi_cooker 预处理，")
+        print("  而那是 32 位 x86 二进制，在 arm64 上跑不了（basalt 就是这样）。")
+        return 1
     out = (proc.stdout or b"").decode("utf-8", "replace")
     print("\n".join("    " + ln for ln in out.strip().splitlines()[-12:]))
 

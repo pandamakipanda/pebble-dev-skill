@@ -5,6 +5,15 @@
 
 ## [未发布]
 
+### 修正
+
+- `tests/test_render.py` 现在**显式处理模拟器超时**。以前 `subprocess.run(timeout=...)`
+  超时会裸抛 `TimeoutExpired`，在 CI 里表现为「步骤无输出、直接失败」，完全看不出是超时。
+  现在会打印已捕获的部分输出 + 明确原因，并新增 `--timeout`（默认 900s）。
+- 补 `emulator-toolkit/requirements.txt`：`dependabot.yml` 里配了 pip 生态指向该目录，
+  但目录下没有清单文件 ⇒ Dependabot 每次运行都失败。补上真实依赖后才正常工作。
+- `emulator-toolkit/README.md` 的依赖安装说明改为指向 requirements.txt。
+
 ### 变更
 
 - **同步 `SKILL.md` 与起始工程到最新状态**（本轮 CI/渲染工作之后）：
