@@ -4,6 +4,7 @@
 
 [![Checks](https://github.com/pandamakipanda/pebble-dev-skill/actions/workflows/checks.yml/badge.svg)](https://github.com/pandamakipanda/pebble-dev-skill/actions/workflows/checks.yml)
 [![Build .pbw](https://github.com/pandamakipanda/pebble-dev-skill/actions/workflows/build-pbw.yml/badge.svg)](https://github.com/pandamakipanda/pebble-dev-skill/actions/workflows/build-pbw.yml)
+[![Render check](https://github.com/pandamakipanda/pebble-dev-skill/actions/workflows/render.yml/badge.svg)](https://github.com/pandamakipanda/pebble-dev-skill/actions/workflows/render.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <p align="center">
@@ -97,9 +98,29 @@ Ubuntu 系统依赖：`python3-pip python3-venv nodejs npm libsdl1.2debian libfd
 逻辑正确性  纯 C 模块 + 单元测试 + 与标准库差分对拍    18,286 检查点
 几何正确性  布局抽成纯函数，穷举行高 × 屏幕尺寸        2,554,681 检查点
 测试有效性  变异测试：注入 20 个已知 bug              20/20 抓到, 0 逃逸
-产物可用性  PBLAPP 魔数 + 元数据解析 + manifest 交叉核对
-视觉正确性  模拟器四平台截图 + 像素分布统计
+产物可用性  PBLAPP 魔数 + 元数据解析 + manifest 交叉核对   verify_pbw.py
+视觉正确性  模拟器实渲染 + 画面断言（CI 四平台）          test_render.py  12 检查点
 ```
+
+**视觉那一层不是锦上添花，它抓的是别人抓不到的东西。** 我们真实踩过一次回归：
+把布局从"比例分布"改成"紧凑堆叠"后，三行文字**全部挤到屏幕底部、上方 2/3 全黑**。
+它不越界、不重叠、非零高 —— **通过了当时所有结构断言**，只有截图才发现。
+
+现在的渲染断言会直接拦下它（`make render`）：
+
+```
+✗ 垂直分布均衡（上留白 157 / 下留白 2，差 155）
+```
+
+这条判据的细节值得记一下：**不要用"字形行范围"判断布局**。42pt 数字的字形只占
+层高的一部分，居中与贴底两种布局的**字形行范围可能重合**（我们被这点误导过一次）。
+上下**留白差值**才是可靠判据。
+
+渲染测试还有个关键设计：从 SDK 的 `qemu_spi_flash.bin.bz2` 解出**出厂镜像**再启动
+（`--pristine-flash`），这样 `before` 是灰色出厂画面、`after` 是黑底表盘，
+**能证明"我的 app 真的渲染了"**，而不只是"屏幕上本来就有东西"。
+（踩过的坑：pebble-tool 持久目录里那份 flash 可能已经带着上次装的 app，
+所谓"全新 flash"启动后直接显示旧表盘。）
 
 **关键信念：`make test` 全绿不能证明测试有效。** 我们第一轮变异测试就逃逸了 3 个变异体
 （`fmt_changed` 恒真、越界输入不夹取、小缓冲越界写全都没被覆盖），补完用例才 20/20。

@@ -3,6 +3,29 @@
 本文件记录所有值得注意的变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布]
+
+### 新增
+
+- **渲染验证（CI 四平台）** —— `.github/workflows/render.yml` + `starter/my-watchface/tests/test_render.py`：
+  在真模拟器里把表盘跑起来、截图、断言画面（12 个检查点）。这是**唯一能抓
+  "合法但难看"问题**的手段：我们真实踩过一次"三行文字全挤到屏幕底部"的回归，
+  它不越界、不重叠、非零高，通过了当时全部结构断言，只有截图才发现。
+- `emu_run.py --pristine-flash`：从 SDK 的 `qemu_spi_flash.bin.bz2` 解出**出厂镜像**
+  再启动，这样 `before` 是灰色出厂画面、`after` 是黑底表盘，
+  **能证明"我的 app 真的渲染了"**而不只是"屏幕上本来就有东西"。
+- `emu_run.py --out-json`：输出结构化报告（启动状态、安装状态、每张截图的尺寸/颜色数/
+  前景像素数），供测试脚本断言。
+- `make render` 目标。
+
+### 修正
+
+- **不要用"字形行范围"判断布局**：42pt 数字的字形只占层高的一部分，居中与贴底两种
+  布局的字形行范围**可能重合**（本次排查中被这点误导过）。上下**留白差值**才可靠，
+  渲染断言用的就是它。
+- `emu_run.py --reset-flash` 的局限：pebble-tool 持久目录里那份 flash 可能已经带着
+  上次装的 app，所谓"全新 flash"启动后直接显示旧表盘 ⇒ 需要 `--pristine-flash`。
+
 ## [1.0.0] - 2026-10-12
 
 首个公开版本。内容来自一次真实的端到端开发：用 AI 智能体从零写出一个 Pebble 表盘，

@@ -196,6 +196,18 @@ def main(argv=None):
     ap.add_argument("--sdk-root")
     ap.add_argument("--qemu")
     ap.add_argument("--flash-dir")
+    ap.add_argument("--pristine-flash", action="store_true",
+                    help="从 SDK 的 qemu_spi_flash.bin.bz2 解出**出厂镜像**再启动。"
+                         "比 --reset-flash 更彻底：pebble-tool 持久目录里那份 flash "
+                         "可能已经带着上次装的 app（我们踩过：'全新' flash 启动后直接"
+                         "显示旧表盘），那样就无法用画面差异证明'我的 app 真的渲染了'")
+    ap.add_argument("--reset-flash", action="store_true",
+                    help="启动前删掉 SPI flash 副本，强制重新解压出 pristine 镜像。"
+                         "需要 before/after 有区别时必须用"
+                         "（flash 副本会记住上次装过的 app，导致 before == after）")
+    ap.add_argument("--out-json", metavar="PATH",
+                    help="把启动信息与截图统计写成 JSON（供测试脚本断言，见 "
+                         "starter/my-watchface/tests/test_render.py）")
     args = ap.parse_args(argv)
     if args.ports:
         if len(args.ports) != 4:
@@ -235,7 +247,30 @@ def main(argv=None):
 
     flash_dir = args.flash_dir or os.environ.get("PEBBLE_EMU_FLASH_DIR") or \
         os.path.join(tempfile.gettempdir(), "pebble-emu")
-    flash = ensure_flash(plat, flash_dir, sdk)
+    if args.reset_flash or args.pristine_flash:
+        stale = os.path.join(flash_dir, f"{plat}_spi.bin")
+        if os.path.exists(stale):
+            os.remove(stale)
+            print(f"flash: 已删除 {stale}", flush=True)
+    if args.pristine_flash:
+        import bz2
+        bz = _spi_bz2(plat, sdk)
+        if not bz:
+            print(f"找不到 {plat} 的 qemu_spi_flash.bin.bz2，无法取出厂镜像",
+                  file=sys.stderr)
+            return 2
+        os.makedirs(flash_dir, exist_ok=True)
+        flash = os.path.join(flash_dir, f"{plat}_spi.bin")
+        with bz2.open(bz, "rb") as src, open(flash, "wb") as dst:
+            import shutil as _sh
+            _sh.copyfileobj(src, dst)
+        got = os.path.getsize(flash)
+        print(f"pristine-flash: 从 {os.path.basename(bz)} 解出 {got} 字节", flush=True)
+        if got != FLASH_SIZE[plat]:
+            print(f"!! 尺寸不对：{got} ≠ {FLASH_SIZE[plat]}", file=sys.stderr)
+            return 2
+    else:
+        flash = ensure_flash(plat, flash_dir, sdk)
     if not os.path.exists(flash) or os.path.getsize(flash) != FLASH_SIZE[plat]:
         print(f"!! SPI flash 尺寸不对：{flash}\n"
               f"   {plat} 需要 {FLASH_SIZE[plat]} 字节。可从 SDK 解压：\n"
@@ -277,6 +312,8 @@ def main(argv=None):
 
 
 def run(plat, args, c, proc, log_path):
+    report = {"platform": plat, "pbw": args.pbw, "screenshots": {},
+              "boot_ok": False, "install_ok": False}
     from libpebble2.communication import PebbleConnection
     from libpebble2.communication.transports.qemu import QemuTransport
     from libpebble2.services.screenshot import Screenshot
@@ -298,6 +335,10 @@ def run(plat, args, c, proc, log_path):
             conn = p
             print(f"booted after ~{attempt * 1.5:.0f}s; "
                   f"fw={p.firmware_version} platform={p.watch_platform}", flush=True)
+            report["boot_ok"] = True
+            report["firmware"] = str(p.firmware_version)
+            report["watch_platform"] = p.watch_platform
+            report["boot_seconds"] = round(attempt * 1.5, 1)
             break
         except Exception as e:
             if attempt % 5 == 0:
@@ -330,19 +371,30 @@ def run(plat, args, c, proc, log_path):
         px2 = img.load()
         cc = Counter(px2[x, y] for y in range(h) for x in range(w))
         print(f"[{label}] {path} {w}x{h} colors={len(cc)} top={cc.most_common(4)}", flush=True)
+        report["screenshots"][label] = {
+            "path": path, "width": w, "height": h,
+            "colors": len(cc),
+            "non_bg_pixels": sum(n for col, n in cc.items() if col != (0, 0, 0)),
+        }
         return img
 
-    shot(f"{args.prefix}-before.png", "boot-screen")
+    shot(f"{args.prefix}-before.png", "before")
     if args.pbw != "-":
         print("installing", args.pbw, os.path.getsize(args.pbw), "bytes", flush=True)
         t0 = time.time()
         AppInstaller(conn, args.pbw).install(force_install=True)
         print(f"install OK in {time.time() - t0:.1f}s", flush=True)
+        report["install_ok"] = True
         time.sleep(5)
-        shot(f"{args.prefix}-after.png", "watchface")
+        shot(f"{args.prefix}-after.png", "after")
         time.sleep(4)
         shot(f"{args.prefix}-after2.png", "watchface+4s")
     print("DONE", plat, flush=True)
+    if args.out_json:
+        import json as _json
+        with open(args.out_json, "w", encoding="utf-8") as f:
+            _json.dump(report, f, ensure_ascii=False, indent=2)
+        print(f"report -> {args.out_json}", flush=True)
     return 0
 
 

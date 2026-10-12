@@ -5,6 +5,7 @@
 #   make mutate  变异测试：注入已知 bug，验证测试套件真的抓得到
 #   make bench   CPU 成本基准
 #   make verify  产物健全性检查（构建成功 ≠ 产物可用）
+#   make render  模拟器实渲染 + 画面断言（唯一能抓"合法但难看"的手段）
 #   make size    真实构建 + 体积分解
 #   make ab      朴素版 vs 优化版的完整链接 A/B
 #   make all     以上全部
@@ -19,7 +20,7 @@ UBSAN       = -fsanitize=undefined -fno-sanitize-recover=all
 SRC_FMT = src/c/fmt.c
 HDR_FMT = src/c/fmt.h
 
-.PHONY: all test bench size ab build clean help
+.PHONY: all test bench size ab build clean help verify mutate render
 
 all: test build
 
@@ -29,6 +30,7 @@ help:
 	@echo "make bench  CPU 成本基准"
 	@echo "make build  pebble build"
 	@echo "make verify 产物健全性检查（防\"构建成功但装不上\"）"
+	@echo "make render 模拟器实渲染 + 画面断言"
 	@echo "make size   构建 + 体积分解"
 	@echo "make ab     朴素版 vs 优化版 A/B"
 	@echo "make clean  清理构建产物"
@@ -46,6 +48,11 @@ test: /tmp/test_fmt /tmp/test_layout
 
 mutate:
 	@python3 tests/mutation_test.py
+
+# 渲染验证：需要 pebble build 过、且本机有 qemu-pebble + libpebble2 + Pillow。
+# 环境不具备时脚本返回 2，这里不当失败（CI 里也这么处理）。
+render: verify
+	@python3 tests/test_render.py --platform emery || [ $$? -eq 2 ]
 
 # 测试构建打开 FMT_TEST_HOOKS：让 fmt.c 里的时间格式化函数导出，
 # 这样"被测代码"与"出货代码"是同一份源文件（出货时它们是 static，会被 gc 掉）

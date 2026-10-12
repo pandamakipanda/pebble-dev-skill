@@ -1,0 +1,124 @@
+# 渲染验证：在真模拟器里把表盘跑起来、截图、断言画面。
+#
+# 为什么单独一个 workflow：它要装 Pebble SDK（约 200 MB）+ QEMU，比 checks 慢得多，
+# 而且只能在 Linux + x86_64 上跑。但它验证的是**结构断言永远抓不到**的一类问题——
+# 我们真实踩过一次"三行文字全挤到屏幕底部"的回归：不越界、不重叠、非零高，
+# 通过当时全部断言，只有截图才发现。
+name: Render check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "skill/pebble-dev/starter/**"
+      - "emulator-toolkit/**"
+      - ".github/workflows/render.yml"
+  pull_request:
+    paths:
+      - "skill/pebble-dev/starter/**"
+      - "emulator-toolkit/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    name: 模拟器实渲染（${{ matrix.platform }}）
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [emery, flint, gabbro, basalt]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"   # pebble-tool 5.0.18+ 尚不支持 3.14
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: 安装 pebble-tool
+        run: uv tool install pebble-tool --python 3.13
+
+      - name: 让 pebble 进 PATH
+        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # QEMU 依赖 SDL2 等共享库；GitHub runner 上 SDL 无 DISPLAY 也能起来
+      # （会打一条 XDG_RUNTIME_DIR 警告，无害）
+      - name: 安装 QEMU 运行时依赖
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libsdl2-2.0-0 libpixman-1-0 libglib2.0-0 \
+            libpng16-16 zlib1g libasound2t64 libpulse0 || \
+          sudo apt-get install -y -qq libsdl2-2.0-0 libpixman-1-0 libglib2.0-0 \
+            libpng16-16 zlib1g libasound2 libpulse0
+
+      - name: 缓存 Pebble SDK
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pebble-sdk
+          key: pebble-sdk-${{ runner.os }}-${{ runner.arch }}-4.33.1
+
+      - name: 安装 SDK
+        run: pebble sdk install 4.33.1 || pebble sdk install latest
+
+      - name: 安装 libpebble2 与 Pillow
+        run: pip install -q libpebble2 Pillow
+
+      - name: 只构建目标平台
+        working-directory: skill/pebble-dev/starter/my-watchface
+        run: |
+          python3 - <<'PY'
+          import json
+          p = "package.json"
+          d = json.load(open(p))
+          d["pebble"]["targetPlatforms"] = ["${{ matrix.platform }}"]
+          json.dump(d, open(p, "w"), indent=2)
+          PY
+          pebble build
+
+      - name: 产物健全性检查
+        working-directory: skill/pebble-dev/starter/my-watchface
+        run: python3 tests/verify_pbw.py
+
+      # 核心步骤：从**出厂镜像**启动（保证基线干净），装包，断言画面。
+      # 退出码 2 表示"环境不具备"（缺 SDK/QEMU），当跳过处理并给出告警。
+      - name: 渲染断言
+        id: render
+        working-directory: skill/pebble-dev/starter/my-watchface
+        run: |
+          set +e
+          python3 tests/test_render.py --platform ${{ matrix.platform }} --keep 2>&1 | tee /tmp/render.log
+          rc=${PIPESTATUS[0]}
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          if [ "$rc" = "2" ]; then
+            echo "::warning::渲染测试因环境不具备而跳过（缺 QEMU / SDK / 依赖）"
+            exit 0
+          fi
+          exit "$rc"
+
+      - name: 渲染报告（Job Summary）
+        if: always()
+        run: |
+          {
+            echo "### 渲染验证：${{ matrix.platform }}"
+            echo ""
+            if [ -f /tmp/render.log ]; then
+              echo '```'
+              tail -25 /tmp/render.log
+              echo '```'
+            else
+              echo "（没有日志）"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 上传截图（失败时也要，方便排查）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-${{ matrix.platform }}
+          path: /tmp/render-test-*/run-*.png
+          if-no-files-found: ignore
+          retention-days: 14

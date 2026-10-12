@@ -14,10 +14,24 @@ cd starter/my-watchface && make test
 ## 提交前必须通过
 
 ```bash
-cd starter/my-watchface
+cd skill/pebble-dev/starter/my-watchface
 make test      # 格式化 + 布局，约 257 万检查点
 make mutate    # 变异测试，必须 20/20 抓到、0 逃逸
-make verify    # 产物健全性（需要先 pebble build）
+make build     # 需要 pebble-tool + SDK
+make verify    # 产物健全性（构建成功 ≠ 产物可用）
+make render    # 模拟器实渲染 + 画面断言（改了布局/字体/颜色时**必跑**）
+```
+
+**改了布局、字体或颜色，`make render` 是必跑的。** 结构断言（越界/重叠/零高）
+抓不到"合法但难看"的问题 —— 我们真实踩过一次"三行挤到底部"的回归，
+它通过当时全部断言，只有截图才发现。
+
+想验证渲染护栏本身有效，可以故意注入回归：
+
+```bash
+sed -i 's|(h - (int16_t)need) / 2|(h - (int16_t)need) - 2|' src/c/fmt.c
+pebble build && python3 tests/test_render.py   # 必须失败在"垂直分布均衡"
+git checkout src/c/fmt.c
 ```
 
 CI 会跑同样的东西（见 `.github/workflows/`）。
