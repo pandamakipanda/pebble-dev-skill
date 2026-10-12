@@ -196,14 +196,32 @@ DWARF 调试信息只进 ELF、**不进固件**，不用为它焦虑。
 | **编译期护栏** | 缓冲区被改小 | `typedef char assert_x[(N >= 需要) ? 1 : -1];` |
 | **布局穷举** | 越界 / 零高 / 重叠 / **分布失衡** | 把布局做成纯函数，穷举行高组合 × 屏幕尺寸（我们跑了 **255 万检查点**） |
 | **变异测试** | 测试本身有没有效 | 见上；这是**前置**步骤，不是补充 |
-| **模拟器截图** | 唯一能抓"合法但难看"的手段 | 见下 |
+| **渲染断言** | 唯一能抓"合法但难看"的手段；**可以自动化进 CI** | 见下（四平台矩阵，约 1 分钟跑完） |
 
 **踩过的坑，直接抄结论：**
 - 测试文件里**不要**自己抄一份缓冲区尺寸，要从共同头文件取（否则改了出货宏测试不响 = 假安全）
 - "合法但难看"的问题（比如三行字全挤到屏幕底部）**结构断言抓不到**——它不越界、不重叠、非零高，完全合法。必须靠**截图 + 像素分布统计**（我们靠"上留白/下留白"才发现回归）
 - 布局要**垂直居中**，不要贴底堆叠
+- ⚠️ **不要用"字形行范围"判断布局。** 这轮排查中我被它误导过：42pt 数字的字形只占层高
+  的一部分，**居中与贴底两种布局的可见字形行范围可能重合**（都是 85..154 附近），
+  看起来"没差别"。**上下留白差值**才可靠 —— 渲染断言用的就是它。
 
-### 无显示器环境跑模拟器截图【报告，已跑通】
+### 无显示器环境跑模拟器截图【已跑通，且已接进 CI 四平台】
+
+> 起始工程里有现成实现：`starter/my-watchface/tests/test_render.py`（`make render`），
+> 以及可移植的启动脚本 `emulator-toolkit/emu_run.py`（自动发现 SDK/flash，无需硬编码路径）。
+
+**渲染断言的三个关键设计**（照抄这三个就能自动化）：
+
+1. **从出厂镜像启动**（`emu_run.py --pristine-flash`，从 SDK 的 `qemu_spi_flash.bin.bz2` 解）。
+   这样 `before` 是**灰色出厂画面**、`after` 是你的 app，于是能断言
+   **"背景从 (170,170,170) 变成黑"** ⇒ 证明"我的 app 真的渲染了"，
+   而不只是"屏幕上本来就有东西"。
+   ⚠️ 只用 `--reset-flash` **不够**：pebble-tool 持久目录里那份 flash 可能已经带着
+   上次装的 app，所谓"全新 flash"启动后**直接显示旧表盘**（这轮就被骗过一次）。
+2. **断言要包括"分布均衡"**，而不只是"不空白/不贴边"。仅靠后者抓不到贴底回归。
+3. **用像素统计而不是"看起来对"**：分辨率、前景像素数、上下左右留白。
+   四平台前景像素数一致（如 emery/flint/gabbro 都是 1786）本身就是强交叉验证。
 
 **两条真因都不是"没有显卡"：**
 1. **SPI flash 尺寸**：emery/flint/gabbro 的是 **32 MiB**，basalt 是 16 MiB。自己 `truncate` 造的空文件尺寸不对 → 固件不响应协议。正确文件 pebble-tool 已解压好：`~/.local/share/pebble-sdk/<版本>/<平台>/qemu_spi_flash.bin`
@@ -231,7 +249,46 @@ QEMU 参数里 `-serial null` 是 serial0，**serial1 才是 Pebble 协议口**�
 
 ---
 
-## 七、调试
+## 七、把这个流程接进 GitHub Actions（两个真实的坑）
+
+我们的 CI 是三个 workflow：`checks`（主机侧测试，约 20 秒）、`build-pbw`（真机构建，
+三平台 × 两种 OS）、`render`（**四平台实渲染 + 画面断言**，约 1 分钟）。
+
+⚠️ **坑 1：`pebble sdk install` 在缓存命中时会报错退出。**
+`SDKManager.install_remote_sdk()` 发现 SDK 已装时直接
+`raise SDKInstallError("<ver> is already installed.")` → **退出码 1**。
+所以千万别写无条件的：
+
+```yaml
+run: pebble sdk install 4.33.1 || pebble sdk install latest   # ❌ 首次绿、之后永远红
+```
+
+这是**定时炸弹式**的写法：第一次跑（缓存未命中）真的装上 → 绿；之后每次缓存命中
+→ 立刻 raise → 红。正确做法是先检测：
+
+```yaml
+run: |
+  # 判定必须看 (active) 标记
+  if pebble sdk list 2>/dev/null | grep -q "(active)"; then
+    echo "已有 SDK，跳过安装"; pebble sdk list
+  else
+    pebble sdk install 4.33.1 || pebble sdk install latest
+  fi
+```
+
+⚠️ 判定条件**别写成** `grep -qE "^[0-9]"`（想匹配版本号）—— **空目录下会误判为已装**，
+因为输出里的 `Available SDKs:` 列表同样是数字开头。这个错我们犯过一次。
+
+⚠️ **坑 2：渲染 job 要装 QEMU 的共享库**，否则 `qemu-pebble` 起不来：
+`libsdl2-2.0-0 libpixman-1-0 libglib2.0-0 libpng16-16 zlib1g libasound2 libpulse0`。
+不需要 `DISPLAY`（SDL 无显示环境也能起，只会打一条 `XDG_RUNTIME_DIR is invalid` 警告）。
+
+另外：把渲染测试的**退出码 2 约定为"环境不具备"**（缺 SDK/QEMU/依赖）并当跳过处理，
+这样 runner 镜像变动不会把 CI 弄红，但真的断言失败照样红。
+
+---
+
+## 八、调试
 
 | 手段 | 用法 |
 |---|---|
@@ -245,7 +302,7 @@ QEMU 参数里 `-serial null` 是 serial0，**serial1 才是 Pebble 协议口**�
 
 ---
 
-## 八、发布
+## 九、发布
 
 - 商店入口：`dev-portal.rebble.io`（Rebble 开发者门户）；`pebble publish` 需要先 `pebble login`
 - 流程文档：`developer.rebble.io/guides/appstore-publishing/`
@@ -253,40 +310,56 @@ QEMU 参数里 `-serial null` 是 serial0，**serial1 才是 Pebble 协议口**�
 
 ---
 
-## 九、官方已经在为 AI 智能体铺路（值得直接读）
+## 十、官方已经在为 AI 智能体铺路（值得直接读）
 
 `github.com/coredevices/PebbleOS` 仓库根目录就有：`AGENTS.md`、`.agents/skills/`（含一个 `working-with-qemu`）、`.claude/CLAUDE.md`（内容是指向 `../AGENTS.md` 的一行软链）、`.claude/skills` 软链到 `.agents/skills`。
 `AGENTS.md` 里写了工程组织、代码风格（C 用 clang-format、Python 用 ruff）、日志级别规范、固件构建（`pbl configure --board=...` / `pbl build` / `pbl test`）、子模块浅克隆策略。**做固件/系统层改动前先读它。**
 
 ---
 
-## 十、可复用的起始工程（本 skill 自带）
+## 十一、可复用的起始工程（本 skill 自带）
 
-**`starter/`**（就在本 skill 目录下，165 KB，自包含、复制即用）是一个已用模拟器四平台截图验证过的表盘工程：
+**`starter/my-watchface/`**（就在本 skill 目录下，自包含、复制即用）是一个
+**已用模拟器四平台实测验证过**的表盘工程：
 
 ```
-starter/
+starter/my-watchface/
 ├── package.json      # 复制后必改 uuid / name / displayName / targetPlatforms
 ├── wscript           # 不用改
-├── src/c/fmt.c/.h    # 纯 C 格式化 + 三段式布局（**不含 pebble.h** ⇒ 可在 PC 上测）
 ├── src/c/ai-watchface.c  # 出货侧写法示范：NULL 守卫、逐层降级、清缓存、文本测量、订阅记账
+├── src/c/fmt.c/.h    # 纯 C 格式化 + 三段式布局（**不含 pebble.h** ⇒ 可在 PC 上测）
 ├── tests/test_fmt.c      # 期望值 + 差分对拍 + 金丝雀字节（18,286 检查点）
 ├── tests/test_layout.c   # 布局穷举 + **源码同步断言**（2,554,681 检查点）
-├── tests/mutation_test.py # 变异测试（20 个注入 bug）
+├── tests/mutation_test.py # 变异测试（20 个注入 bug，必须 0 逃逸）
+├── tests/verify_pbw.py   # 产物健全性（PBLAPP 魔数/元数据/manifest 交叉核对）
+├── tests/selftest_verify.py # 护栏自检：构造坏包确认 verify_pbw 真能拦下
+├── tests/test_render.py  # **模拟器实渲染 + 画面断言**（唯一能抓"合法但难看"的手段）
 ├── bench/ + measure.sh   # 体积 A/B 与 CPU 基准
-└── Makefile          # make test / mutate / size / ab
+└── Makefile          # make test / mutate / verify / render / size / ab
 ```
 
 复制到任意位置后直接可用（路径全部相对定位，无硬编码）：
 
 ```bash
-cp -a <本skill目录>/starter ~/my-pebble-app && cd ~/my-pebble-app
-# 改 package.json 里的 uuid/name/displayName/targetPlatforms
-make test && make mutate && pebble build
+cp -a <本skill目录>/starter/my-watchface ~/my-watchface && cd ~/my-watchface
+# 改 package.json 里的 uuid / name / displayName / targetPlatforms
+make test && make mutate          # 秒级，不需要 SDK
+pebble build && make verify       # 需要 pebble-tool + SDK
+make render                       # 需要 qemu-pebble + libpebble2 + Pillow
 ```
 
-想跑真实渲染截图，再配合无头模拟器工具包（见第六节；工作区里还有一份完整版在
-`/sdcard/AGENTWORK/pebble-lab/emulator-toolkit/`）。
+跑真实渲染还需要 `emulator-toolkit/emu_run.py`（见第六节）。它在**本 skill 目录的上一级**
+（发布仓库里），所以不要写死 `../` 的层数 —— 用查找：
+
+```bash
+pip install libpebble2 Pillow
+EMU=$(find .. -name emu_run.py -path '*emulator-toolkit*' | head -1)
+python3 "$EMU" emery build/*.pbw /tmp/out --pristine-flash
+```
+
+> 注意：本 skill 单独安装时**不带** `emulator-toolkit/`（它属于发布仓库）。
+> 要跑渲染验证请从仓库克隆：`git clone https://github.com/pandamakipanda/pebble-dev-skill`
+> （该工具的路径问题我们踩过两次：数 `../` 层数总会数错，一律用查找。）
 
 **注意**：`make test` 里的 `test_layout.c` 带"源码同步断言"，会去读同工程的
 `src/c/ai-watchface.c` 与 `src/c/fmt.c` 校验关键写法（布局居中、缓冲区来自 `fmt.h`、

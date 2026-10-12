@@ -9,7 +9,7 @@
   "dependencies": {},
   "pebble": {
     "displayName": "My Watchface",
-    "uuid": "6b4c3163-83a1-406d-aebd-388d4ead34c4",
+    "uuid": "b5fe10bc-7e71-43d3-855c-84dfa95768c7",
     "sdkVersion": "3",
     "enableMultiJS": true,
     "targetPlatforms": [

@@ -5,6 +5,19 @@
 
 ## [未发布]
 
+### 变更
+
+- **同步 `SKILL.md` 与起始工程到最新状态**（本轮 CI/渲染工作之后）：
+  - `SKILL.md` 新增一节「把这个流程接进 GitHub Actions」，记录两个真实踩坑：
+    ① `pebble sdk install` 在**缓存命中时会 raise 并以退出码 1 退出**（无条件调用 =
+       首次绿、之后永远红的定时炸弹）；② 渲染 job 必须装 QEMU 的共享库。
+  - `SKILL.md` 补上**"不要用字形行范围判断布局"**的警告 —— 42pt 数字的字形只占层高
+    一部分，居中与贴底的字形行范围可能重合（85..154），上下**留白差值**才可靠。
+  - 起始工程同步：目录名对齐 `starter/my-watchface/`，补 `tests/test_render.py`
+    （模拟器实渲染断言）、`tests/selftest_verify.py`（护栏自检）、
+    `Makefile` 的 `render` 目标、`emu_run.py` 的可移植实现。
+  - 章节重排：CI 从第六节的子节提升为独立的第七节，全文 11 节。
+
 ### 新增
 
 - **渲染验证（CI 四平台）** —— `.github/workflows/render.yml` + `starter/my-watchface/tests/test_render.py`：
@@ -33,7 +46,7 @@
 
 ### 新增
 
-- **`skill/pebble-dev/SKILL.md`** —— 面向 AI 智能体的 Pebble 开发 skill，10 节：
+- **`skill/pebble-dev/SKILL.md`** —— 面向 AI 智能体的 Pebble 开发 skill（1.0.0 时为 10 节，见「未发布」的章节重排）：
   平台代号对照、环境搭建（含 arm64 的 4 个真实坑）、工程结构、**API 语义速查**、
   优化实测、**验证方法论**、调试、发布、官方 agent 约定、自带起始工程。
 - **`skill/pebble-dev/starter/my-watchface/`** —— 真实可构建的表盘模板：
