@@ -52,7 +52,7 @@ jobs:
 
       # SDK + 工具链约 240 MB，缓存后第二次起快很多
       - name: 缓存 Pebble SDK
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.local/share/pebble-sdk
           key: pebble-sdk-${{ runner.os }}-${{ runner.arch }}-4.33.1
