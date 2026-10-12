@@ -23,7 +23,7 @@ jobs:
     name: 打包并发布
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # CHANGELOG / 描述需要完整历史
 

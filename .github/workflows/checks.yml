@@ -18,7 +18,7 @@ jobs:
     name: SKILL.md 结构检查
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: 校验 skill frontmatter 与内部链接
         run: python3 .github/scripts/lint_skill.py skill/pebble-dev/SKILL.md
@@ -31,7 +31,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: 环境
         run: |
@@ -79,7 +79,7 @@ jobs:
     name: Python 语法与风格
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -104,7 +104,7 @@ jobs:
     name: Shell 脚本检查
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: shellcheck
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck

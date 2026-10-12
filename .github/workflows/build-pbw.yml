@@ -35,7 +35,7 @@ jobs:
           - os: macos-latest
             platform: gabbro       # Pebble Round 2
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v7
         with:
