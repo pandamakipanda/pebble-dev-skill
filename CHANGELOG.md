@@ -51,4 +51,4 @@
 - 起始工程的 `uuid` 已替换为随机值；复制后请再换成你自己的。
 - `DAY_NAMES` 由指针数组改为扁平字符串（`.data` 28 → 0 字节，省的是 RAM）。
 
-[1.0.0]: https://github.com/OWNER/REPO/releases/tag/v1.0.0
+[1.0.0]: https://github.com/pandamakipanda/pebble-dev-skill/releases/tag/v1.0.0

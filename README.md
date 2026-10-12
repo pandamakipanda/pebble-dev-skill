@@ -2,8 +2,8 @@
 
 **一个给 AI 编码智能体用的 Pebble 手表开发 skill** —— 附带一套**用模拟器实测验证过**的起始工程和验证方法论。
 
-[![Checks](https://github.com/OWNER/REPO/actions/workflows/checks.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/checks.yml)
-[![Build .pbw](https://github.com/OWNER/REPO/actions/workflows/build-pbw.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/build-pbw.yml)
+[![Checks](https://github.com/pandamakipanda/pebble-dev-skill/actions/workflows/checks.yml/badge.svg)](https://github.com/pandamakipanda/pebble-dev-skill/actions/workflows/checks.yml)
+[![Build .pbw](https://github.com/pandamakipanda/pebble-dev-skill/actions/workflows/build-pbw.yml/badge.svg)](https://github.com/pandamakipanda/pebble-dev-skill/actions/workflows/build-pbw.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <p align="center">
