@@ -49,26 +49,33 @@ Saved screenshot to /root/shot-official-emery.png      # 200x228, 显示 15:49 /
 
 ## 用法
 
+脚本已做成**可移植**：不硬编码任何本机路径，会自动发现 SDK、qemu-pebble 与 SPI flash
+（从 SDK 的 `qemu_spi_flash.bin.bz2` 解压），并**校验 flash 尺寸**。
+
 ```bash
-PY=/root/ptvenv/bin/python3
-SDKPLAT=emery                      # emery | flint | basalt | gabbro | diorite | chalk | aplite
+pip install libpebble2 Pillow          # 依赖（若用 pebble-tool 的 venv 会自动找到）
 
-# 方式 A：全自动（自己拉 QEMU → 装 pbw → 截图 → 杀掉 QEMU）
-$PY emu_run.py $SDKPLAT <pbw路径> <输出前缀> <proto> <console> <gdb> <monitor>
-$PY emu_run.py emery /path/app.pbw /tmp/qw/out 12410 12411 12412 12413
-#   → /tmp/qw/out-before.png（装机前启动画面）
-#     /tmp/qw/out-after.png （表盘画面）  /tmp/qw/out-after2.png（+4s，用于看是否在动）
+# 把 .pbw 装进模拟器并截图 → <prefix>-before.png / -after.png / -after2.png
+python3 emu_run.py emery /path/to/app.pbw /tmp/out
 
-# 方式 B：附着到已经在跑的 QEMU（只要知道它的 Pebble 协议端口）
-$PY attach.py <proto_port> <pbw路径|-> <输出前缀>
-
-# 方式 C：只要一张图（QEMU monitor 的 screendump，不用 Pebble 协议，但颜色可能不准）
-#   连 monitor 端口执行：  screendump /tmp/x.ppm     然后 $PY ppm2png.py /tmp/x.ppm /tmp/x.png 3
+# 只截启动画面（不装东西）
+python3 emu_run.py emery - /tmp/boot
 ```
 
-**端口约定**：QEMU 的 `-serial null` 是 serial0；**serial1 = Pebble 协议端口**；**serial2 = 固件控制台**
-（启动日志 `<SDK Home>` / `<Launcher>` / `Ready for communication` 从这里出）。
-`proto` 就是连 `QemuTransport` 的那个端口。
+选项（一般不用给）：
+
+| 选项 | 说明 |
+|---|---|
+| `--proto/--cons/--gdb/--mon PORT` | 四个串口/监视口，默认 12344/12345/12346/12347 |
+| `--sdk-root DIR` | Pebble SDK 根目录（含 `toolchain/` 与 `sdk-core/`） |
+| `--qemu PATH` | `qemu-pebble` 可执行文件 |
+| `--flash-dir DIR` | SPI flash 存放目录，默认 `$TMPDIR/pebble-emu` |
+
+环境变量：`PEBBLE_SDK_ROOT` / `PEBBLE_QEMU` / `PEBBLE_EMU_FLASH_DIR`。
+
+> 旧写法 `<plat> <pbw> <prefix> <proto> <cons> <gdb> <mon>`（7 个位置参数）仍然兼容。
+
+退出码：`0` 成功、`1` 启动或连接失败、`2` 参数或环境问题（缺依赖 / 找不到 SDK / flash 尺寸不对）。
 
 ## 实测结果
 

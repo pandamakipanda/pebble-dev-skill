@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: 校验 skill frontmatter 与内部链接
-        run: python3 .github/scripts/lint_skill.py SKILL.md
+        run: python3 .github/scripts/lint_skill.py skill/pebble-dev/SKILL.md
 
   host-tests:
     name: 单元测试 / 布局穷举 / 变异测试 / 产物检查脚本
@@ -44,20 +44,20 @@ jobs:
 
       # ---- 起始工程的三层验证 ----
       - name: 格式化单元测试 + 差分对拍
-        working-directory: starter/my-watchface
+        working-directory: skill/pebble-dev/starter/my-watchface
         run: |
           make test 2>&1 | tee /tmp/test.log
           # 注意实际输出是 "失败: 0"，不是 "0 失败" —— 这里写错过一次，本地模拟 CI 时抓出来的
           grep -q "失败: 0" /tmp/test.log
 
       - name: 变异测试（必须 0 逃逸、0 过期变异体）
-        working-directory: starter/my-watchface
+        working-directory: skill/pebble-dev/starter/my-watchface
         run: |
           make mutate 2>&1 | tee /tmp/mutate.log
           grep -q "逃逸 0 / 过期 0" /tmp/mutate.log
 
       - name: 编译期护栏确实会拦下坏改动
-        working-directory: starter/my-watchface
+        working-directory: skill/pebble-dev/starter/my-watchface
         run: |
           # 把电池缓冲区改小到 5，fmt.h 里的静态断言必须让编译失败。
           # 这条测试防的是"护栏被悄悄删掉"。
@@ -72,7 +72,7 @@ jobs:
           echo "护栏生效 ✓"
 
       - name: 产物健全性检查能识别坏包（用构造的坏包做反向验证）
-        working-directory: starter/my-watchface
+        working-directory: skill/pebble-dev/starter/my-watchface
         run: python3 tests/selftest_verify.py
 
   python-lint:
