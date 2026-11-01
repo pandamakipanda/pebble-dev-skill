@@ -8,4 +8,4 @@
 # 注意：也可以用 pebble-tool 自带的 venv（emu_run.py 会自动去找它的
 # site-packages），那种情况下不必单独装。
 libpebble2>=0.0.31
-Pillow>=10.0.0
+Pillow>=13.0.0
